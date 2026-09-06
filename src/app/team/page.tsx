@@ -20,6 +20,7 @@ import {
 } from 'firebase/firestore';
 import { CalendarDays, CheckCircle2, Clock3, LogOut } from 'lucide-react';
 import { auth, db } from '@/lib/firebase';
+import { getErrorMessage } from '@/lib/errors';
 import type { AvailabilityRange, DayKey, EmployeeRecord } from '@/lib/availability';
 
 const days: Array<{ key: DayKey; label: string }> = [
@@ -66,7 +67,7 @@ export default function TeamPortalPage() {
     try {
       if (mode === 'create') await createUserWithEmailAndPassword(auth, email, password);
       else await signInWithEmailAndPassword(auth, email, password);
-    } catch (error: any) { setAuthError(error?.message || 'Unable to sign in.'); }
+    } catch (error: unknown) { setAuthError(getErrorMessage(error, 'Unable to sign in.')); }
   }
 
   function rangeFor(day: DayKey) { return profile?.weeklyAvailability?.[day]?.[0] ?? defaultRange; }
