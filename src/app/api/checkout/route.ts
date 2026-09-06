@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { addDoc, collection, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { getErrorMessage } from '@/lib/errors';
 import { calculateQuote, type AddOnKey, type ConditionLevel, type TravelZone, type VehicleSize } from '@/lib/pricing';
 import { createDepositCheckout } from '@/lib/stripe-server';
 
@@ -97,8 +98,8 @@ export async function POST(request: Request) {
       checkoutUrl: checkout.url,
       quote,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Checkout creation failed', error);
-    return NextResponse.json({ error: error?.message || 'Unable to begin checkout.' }, { status: 500 });
+    return NextResponse.json({ error: getErrorMessage(error, 'Unable to begin checkout.') }, { status: 500 });
   }
 }
