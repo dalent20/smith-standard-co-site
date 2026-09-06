@@ -97,6 +97,19 @@ export default function CustomerAccountPage() {
     await loadAccount(user.uid);
   }
 
+  function bookVehicle(vehicle: Vehicle) {
+    try {
+      const current = JSON.parse(localStorage.getItem('smith-standard-vehicles') || '[]');
+      const normalized = { id: vehicle.id, yearMakeModel: vehicle.yearMakeModel, nickname: vehicle.nickname ?? '', size: vehicle.size };
+      const next = [normalized, ...(Array.isArray(current) ? current.filter((item: any) => item.id !== vehicle.id) : [])].slice(0, 8);
+      localStorage.setItem('smith-standard-vehicles', JSON.stringify(next));
+      localStorage.setItem('smith-standard-selected-vehicle', vehicle.id);
+    } catch {
+      // Booking still works if browser storage is unavailable.
+    }
+    window.location.assign('/booking');
+  }
+
   if (loading) return <main className="grid min-h-screen place-items-center bg-black text-white">Loading Smith Standard…</main>;
 
   if (!user) {
@@ -134,7 +147,7 @@ export default function CustomerAccountPage() {
           <section className="rounded-3xl bg-white p-7 shadow-sm">
             <div className="flex items-center justify-between"><div><div className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-400">Garage</div><h2 className="mt-2 text-3xl font-semibold tracking-tight">Your vehicles</h2></div><Car className="h-7 w-7" /></div>
             <div className="mt-6 grid gap-3 sm:grid-cols-2">
-              {vehicles.map((vehicle) => <div key={vehicle.id} className="rounded-2xl border border-zinc-200 p-5"><div className="flex items-start justify-between gap-3"><div><div className="font-semibold">{vehicle.nickname || vehicle.yearMakeModel}</div>{vehicle.nickname ? <div className="mt-1 text-xs text-zinc-500">{vehicle.yearMakeModel}</div> : null}<div className="mt-3 text-xs text-zinc-500">{vehicleSizes[vehicle.size].label}</div></div><button onClick={() => removeVehicle(vehicle.id)} className="text-zinc-400 hover:text-red-600"><Trash2 className="h-4 w-4" /></button></div><Link href={`/booking?vehicle=${encodeURIComponent(vehicle.id)}`} className="mt-5 inline-block text-xs font-semibold uppercase tracking-wider">Book this vehicle →</Link></div>)}
+              {vehicles.map((vehicle) => <div key={vehicle.id} className="rounded-2xl border border-zinc-200 p-5"><div className="flex items-start justify-between gap-3"><div><div className="font-semibold">{vehicle.nickname || vehicle.yearMakeModel}</div>{vehicle.nickname ? <div className="mt-1 text-xs text-zinc-500">{vehicle.yearMakeModel}</div> : null}<div className="mt-3 text-xs text-zinc-500">{vehicleSizes[vehicle.size].label}</div></div><button onClick={() => removeVehicle(vehicle.id)} className="text-zinc-400 hover:text-red-600"><Trash2 className="h-4 w-4" /></button></div><button type="button" onClick={() => bookVehicle(vehicle)} className="mt-5 text-xs font-semibold uppercase tracking-wider">Book this vehicle →</button></div>)}
               {!vehicles.length ? <div className="rounded-2xl border border-dashed border-zinc-300 p-6 text-sm text-zinc-500">No saved vehicles yet. Add your first one below.</div> : null}
             </div>
             <form onSubmit={addVehicle} className="mt-6 grid gap-3 rounded-2xl bg-zinc-50 p-5 sm:grid-cols-2">
@@ -148,7 +161,7 @@ export default function CustomerAccountPage() {
           <section className={`rounded-3xl p-7 text-white shadow-sm ${membership?.status === 'active' ? 'bg-black' : 'bg-zinc-800'}`}>
             <ShieldCheck className="h-7 w-7" /><div className="mt-5 text-xs font-semibold uppercase tracking-[0.18em] text-zinc-400">Membership</div><h2 className="mt-2 text-3xl font-semibold">{membership?.status === 'active' ? 'The Standard, on repeat.' : 'Keep it maintained.'}</h2>
             <p className="mt-4 text-sm leading-6 text-zinc-300">{membership?.status === 'active' ? `Your membership is active${membership.nextDetailDate ? ` and the next detail is targeted for ${membership.nextDetailDate}` : ''}.` : 'Opt in on your next booking: 10% off the first detail, then 30% off recurring details every two months.'}</p>
-            <Link href="/booking?membership=1" className="mt-6 inline-block rounded-xl bg-white px-5 py-3 text-sm font-semibold text-black">{membership?.status === 'active' ? 'Schedule next detail' : 'Book with membership'}</Link>
+            <Link href="/booking" className="mt-6 inline-block rounded-xl bg-white px-5 py-3 text-sm font-semibold text-black">{membership?.status === 'active' ? 'Schedule next detail' : 'Book & choose membership'}</Link>
           </section>
         </div>
 
