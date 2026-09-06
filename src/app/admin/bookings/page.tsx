@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { collection, doc, getDocs, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { CreditCard, Images, MapPin, RefreshCw, Users } from 'lucide-react';
 import { auth, db } from '@/lib/firebase';
+import { getErrorMessage } from '@/lib/errors';
 import type { EmployeeRecord } from '@/lib/availability';
 
 type Booking = {
@@ -78,8 +79,8 @@ export default function AdminBookingsPage() {
       if (!response.ok) throw new Error(data.error || 'Stripe charge failed.');
       setMessage(data.alreadyPaid ? 'This booking is already paid in full.' : `Stripe balance charge: ${data.status}`);
       await load();
-    } catch (error: any) {
-      setMessage(error?.message || 'Unable to collect balance.');
+    } catch (error: unknown) {
+      setMessage(getErrorMessage(error, 'Unable to collect balance.'));
     }
   }
 
