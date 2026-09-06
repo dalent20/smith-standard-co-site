@@ -1,6 +1,10 @@
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const GOOGLE_CALENDAR_BASE = 'https://www.googleapis.com/calendar/v3';
 
+type BusyWindow = { start: string; end: string };
+type FreeBusyCalendar = { busy?: BusyWindow[] };
+type FreeBusyResponse = { calendars?: Record<string, FreeBusyCalendar> };
+
 async function getAccessToken() {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
@@ -27,13 +31,13 @@ async function getAccessToken() {
     return null;
   }
 
-  const data = await response.json();
-  return data.access_token as string;
+  const data = (await response.json()) as { access_token?: string };
+  return data.access_token ?? null;
 }
 
 export async function getCalendarBusyWindows(calendarIds: string[], timeMin: string, timeMax: string) {
   const accessToken = await getAccessToken();
-  if (!accessToken || calendarIds.length === 0) return {} as Record<string, Array<{ start: string; end: string }>>;
+  if (!accessToken || calendarIds.length === 0) return {} as Record<string, BusyWindow[]>;
 
   const response = await fetch(`${GOOGLE_CALENDAR_BASE}/freeBusy`, {
     method: 'POST',
@@ -52,13 +56,13 @@ export async function getCalendarBusyWindows(calendarIds: string[], timeMin: str
 
   if (!response.ok) {
     console.error('Google Calendar free/busy failed', await response.text());
-    return {} as Record<string, Array<{ start: string; end: string }>>;
+    return {} as Record<string, BusyWindow[]>;
   }
 
-  const data = await response.json();
-  const result: Record<string, Array<{ start: string; end: string }>> = {};
-  for (const [calendarId, value] of Object.entries<any>(data.calendars ?? {})) {
-    result[calendarId] = value.busy ?? [];
+  const data = (await response.json()) as FreeBusyResponse;
+  const result: Record<string, BusyWindow[]> = {};
+  for (const [calendarId, value] of Object.entries(data.calendars ?? {})) {
+    result[calendarId] = Array.isArray(value.busy) ? value.busy : [];
   }
   return result;
 }
@@ -99,7 +103,7 @@ export async function createCompanyCalendarEvent(input: {
     return null;
   }
 
-  return response.json();
+  return response.json() as Promise<{ id?: string; htmlLink?: string }>;
 }
 
 export function isGoogleCalendarConfigured() {
