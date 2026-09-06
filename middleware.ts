@@ -1,20 +1,20 @@
-// middleware.ts
 import { NextRequest, NextResponse } from 'next/server';
+import { verifyAdminSession } from './src/lib/admin-session';
 
-export function middleware(request: NextRequest) {
-    const isLoggedIn = request.cookies.get('admin-auth')?.value;
+export async function middleware(request: NextRequest) {
+  const url = request.nextUrl.clone();
+  if (url.pathname.startsWith('/admin/login')) return NextResponse.next();
 
-    const url = request.nextUrl.clone();
+  const session = await verifyAdminSession(request.cookies.get('smith-standard-admin')?.value);
+  if (!session) {
+    url.pathname = '/admin/login';
+    url.searchParams.set('next', request.nextUrl.pathname);
+    return NextResponse.redirect(url);
+  }
 
-    // If not logged in and trying to access /admin (but not /admin/login)
-    if (!isLoggedIn && url.pathname.startsWith('/admin') && !url.pathname.startsWith('/admin/login')) {
-        url.pathname = '/admin/login';
-        return NextResponse.redirect(url);
-    }
-
-    return NextResponse.next();
+  return NextResponse.next();
 }
 
 export const config = {
-    matcher: ['/admin/:path*'],
+  matcher: ['/admin/:path*'],
 };
