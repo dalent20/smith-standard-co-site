@@ -48,6 +48,7 @@ export async function createDepositCheckout(input: {
 }) {
   const params = new URLSearchParams();
   params.set('mode', 'payment');
+  params.set('customer_creation', 'always');
   params.set('customer_email', input.email);
   params.set('success_url', `${input.origin}/booking/success?session_id={CHECKOUT_SESSION_ID}`);
   params.set('cancel_url', `${input.origin}/booking?booking=${encodeURIComponent(input.bookingId)}&payment=cancelled`);
