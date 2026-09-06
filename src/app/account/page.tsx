@@ -24,10 +24,29 @@ import {
 } from 'firebase/firestore';
 import { Car, LogOut, Plus, ShieldCheck, Trash2 } from 'lucide-react';
 import { auth, db } from '@/lib/firebase';
+import { getErrorMessage } from '@/lib/errors';
 import { vehicleSizes, type VehicleSize } from '@/lib/pricing';
 
 type Vehicle = { id: string; yearMakeModel: string; nickname?: string; size: VehicleSize };
 type Booking = { id: string; date?: string; time?: string; status?: string; vehicle?: { yearMakeModel?: string }; quote?: { total?: number } };
+type Membership = {
+  status?: 'active' | 'inactive' | 'past_due' | 'cancelled' | string;
+  nextDetailDate?: string;
+  subscriptionId?: string;
+  recurringPrice?: number;
+  cadenceMonths?: number;
+};
+
+function isVehicle(value: unknown): value is Vehicle {
+  if (!value || typeof value !== 'object') return false;
+  const record = value as Record<string, unknown>;
+  return (
+    typeof record.id === 'string' &&
+    typeof record.yearMakeModel === 'string' &&
+    typeof record.size === 'string' &&
+    record.size in vehicleSizes
+  );
+}
 
 export default function CustomerAccountPage() {
   const [user, setUser] = useState<User | null>(null);
@@ -39,7 +58,7 @@ export default function CustomerAccountPage() {
   const [message, setMessage] = useState('');
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
-  const [membership, setMembership] = useState<any>(null);
+  const [membership, setMembership] = useState<Membership | null>(null);
   const [vehicleForm, setVehicleForm] = useState({ yearMakeModel: '', nickname: '', size: 'small' as VehicleSize });
 
   useEffect(() => onAuthStateChanged(auth, async (currentUser) => {
@@ -56,7 +75,8 @@ export default function CustomerAccountPage() {
     ]);
     setVehicles(vehicleSnapshot.docs.map((item) => ({ id: item.id, ...(item.data() as Omit<Vehicle, 'id'>) })));
     setBookings(bookingSnapshot.docs.map((item) => ({ id: item.id, ...(item.data() as Omit<Booking, 'id'>) })).sort((a, b) => String(b.date ?? '').localeCompare(String(a.date ?? ''))));
-    setMembership(customerSnapshot.exists() ? customerSnapshot.data().membership ?? null : null);
+    const rawMembership = customerSnapshot.exists() ? customerSnapshot.data().membership : null;
+    setMembership(rawMembership && typeof rawMembership === 'object' ? (rawMembership as Membership) : null);
   }
 
   async function authenticate(event: React.FormEvent) {
@@ -75,8 +95,8 @@ export default function CustomerAccountPage() {
       } else {
         await signInWithEmailAndPassword(auth, email, password);
       }
-    } catch (error: any) {
-      setMessage(error?.message || 'Unable to sign in.');
+    } catch (error: unknown) {
+      setMessage(getErrorMessage(error, 'Unable to sign in.'));
     }
   }
 
@@ -99,9 +119,10 @@ export default function CustomerAccountPage() {
 
   function bookVehicle(vehicle: Vehicle) {
     try {
-      const current = JSON.parse(localStorage.getItem('smith-standard-vehicles') || '[]');
-      const normalized = { id: vehicle.id, yearMakeModel: vehicle.yearMakeModel, nickname: vehicle.nickname ?? '', size: vehicle.size };
-      const next = [normalized, ...(Array.isArray(current) ? current.filter((item: any) => item.id !== vehicle.id) : [])].slice(0, 8);
+      const parsed: unknown = JSON.parse(localStorage.getItem('smith-standard-vehicles') || '[]');
+      const current = Array.isArray(parsed) ? parsed.filter(isVehicle) : [];
+      const normalized: Vehicle = { id: vehicle.id, yearMakeModel: vehicle.yearMakeModel, nickname: vehicle.nickname ?? '', size: vehicle.size };
+      const next = [normalized, ...current.filter((item) => item.id !== vehicle.id)].slice(0, 8);
       localStorage.setItem('smith-standard-vehicles', JSON.stringify(next));
       localStorage.setItem('smith-standard-selected-vehicle', vehicle.id);
     } catch {
