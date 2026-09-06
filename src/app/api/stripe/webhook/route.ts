@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
-import { doc, getDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { createCompanyCalendarEvent } from '@/lib/google-calendar';
-import { retrieveCheckoutSession, verifyStripeWebhook } from '@/lib/stripe-server';
+import { createMembershipSubscription, retrieveCheckoutSession, verifyStripeWebhook } from '@/lib/stripe-server';
 import { addMinutes, localDateTimeToUtc, toIsoWithOffset } from '@/lib/time';
 
 export const runtime = 'nodejs';
@@ -46,6 +46,53 @@ export async function POST(request: Request) {
         updatedAt: serverTimestamp(),
       });
 
+      if (booking.membershipOptIn && customerId && paymentMethodId && !booking.stripeMembershipSubscriptionId) {
+        try {
+          const membership = await createMembershipSubscription({
+            bookingId,
+            customerId,
+            paymentMethodId,
+            recurringAmountCents: Math.round(Number(booking.quote?.recurringMembershipPrice ?? 0) * 100),
+            vehicleLabel: booking.vehicle?.yearMakeModel || 'Vehicle',
+            customerUid: booking.customerUid ?? null,
+          });
+          const nextDetailDate = new Date(membership.trialEnd * 1000).toISOString().slice(0, 10);
+          await updateDoc(bookingRef, {
+            stripeMembershipSubscriptionId: membership.subscription.id,
+            stripeMembershipPriceId: membership.price.id,
+            membershipStatus: 'active',
+            nextMembershipDetailDate: nextDetailDate,
+            updatedAt: serverTimestamp(),
+          });
+          if (booking.customerUid) {
+            await setDoc(
+              doc(db, 'customers', booking.customerUid),
+              {
+                membership: {
+                  status: 'active',
+                  subscriptionId: membership.subscription.id,
+                  priceId: membership.price.id,
+                  vehicleLabel: booking.vehicle?.yearMakeModel || 'Vehicle',
+                  recurringPrice: Number(booking.quote?.recurringMembershipPrice ?? 0),
+                  cadenceMonths: 2,
+                  nextDetailDate,
+                  sourceBookingId: bookingId,
+                },
+                updatedAt: serverTimestamp(),
+              },
+              { merge: true },
+            );
+          }
+        } catch (membershipError) {
+          // The reservation itself should still succeed if membership activation needs attention.
+          console.error('Membership activation failed', membershipError);
+          await updateDoc(bookingRef, {
+            membershipStatus: 'activation_failed',
+            updatedAt: serverTimestamp(),
+          });
+        }
+      }
+
       const crewIds: string[] = booking.crewIds ?? [];
       const crewEmails: string[] = [];
       const crewNames: string[] = [];
@@ -69,6 +116,7 @@ export async function POST(request: Request) {
           `Crew: ${crewNames.join(' + ') || 'Assigned in Smith Standard OS'}`,
           `Total: $${Number(booking.quote?.total ?? 0).toFixed(2)}`,
           `Deposit paid: $${Number(booking.quote?.deposit ?? 0).toFixed(2)}`,
+          booking.membershipOptIn ? `Membership: opted in; recurring estimate $${Number(booking.quote?.recurringMembershipPrice ?? 0).toFixed(2)} every 2 months` : 'Membership: no',
         ].join('\n'),
         location: booking.serviceAddress,
         start: toIsoWithOffset(startUtc),
@@ -115,6 +163,15 @@ export async function POST(request: Request) {
             updatedAt: serverTimestamp(),
           });
         }
+      }
+    }
+
+    if (event.type === 'invoice.payment_failed') {
+      const invoice = event.data.object;
+      const subscriptionId = typeof invoice.subscription === 'string' ? invoice.subscription : invoice.subscription?.id;
+      if (subscriptionId) {
+        // Membership-specific dunning is left to Stripe Smart Retries; the dashboard can surface the failed invoice.
+        console.warn('Smith Standard membership invoice failed', subscriptionId);
       }
     }
 
