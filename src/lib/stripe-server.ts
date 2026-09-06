@@ -90,6 +90,55 @@ export async function collectRemainingBalance(input: {
   return stripePost('/payment_intents', params, `smith-standard-balance-${input.bookingId}`);
 }
 
+export async function createMembershipSubscription(input: {
+  bookingId: string;
+  customerId: string;
+  paymentMethodId: string;
+  recurringAmountCents: number;
+  vehicleLabel: string;
+  customerUid?: string | null;
+}) {
+  // The first detail is paid separately (10% member discount, 50/50 split).
+  // This subscription begins charging approximately two months later and then every two months.
+  const productParams = new URLSearchParams();
+  productParams.set('name', `Smith Standard Membership — ${input.vehicleLabel}`);
+  productParams.set('description', 'Recurring Smith Standard detail every two months at the member rate.');
+  productParams.set('metadata[bookingId]', input.bookingId);
+  if (input.customerUid) productParams.set('metadata[customerUid]', input.customerUid);
+  const product = await stripePost('/products', productParams, `smith-standard-membership-product-${input.bookingId}`);
+
+  const priceParams = new URLSearchParams();
+  priceParams.set('product', product.id);
+  priceParams.set('currency', 'usd');
+  priceParams.set('unit_amount', String(input.recurringAmountCents));
+  priceParams.set('recurring[interval]', 'month');
+  priceParams.set('recurring[interval_count]', '2');
+  priceParams.set('metadata[bookingId]', input.bookingId);
+  const price = await stripePost('/prices', priceParams, `smith-standard-membership-price-${input.bookingId}`);
+
+  const twoMonthsFromNow = new Date();
+  twoMonthsFromNow.setUTCMonth(twoMonthsFromNow.getUTCMonth() + 2);
+  const trialEnd = Math.floor(twoMonthsFromNow.getTime() / 1000);
+
+  const subscriptionParams = new URLSearchParams();
+  subscriptionParams.set('customer', input.customerId);
+  subscriptionParams.set('items[0][price]', price.id);
+  subscriptionParams.set('default_payment_method', input.paymentMethodId);
+  subscriptionParams.set('trial_end', String(trialEnd));
+  subscriptionParams.set('proration_behavior', 'none');
+  subscriptionParams.set('metadata[bookingId]', input.bookingId);
+  subscriptionParams.set('metadata[membershipType]', 'bi-monthly-detail');
+  if (input.customerUid) subscriptionParams.set('metadata[customerUid]', input.customerUid);
+
+  const subscription = await stripePost(
+    '/subscriptions',
+    subscriptionParams,
+    `smith-standard-membership-subscription-${input.bookingId}`,
+  );
+
+  return { product, price, subscription, trialEnd };
+}
+
 export async function retrieveCheckoutSession(sessionId: string) {
   return stripeGet(`/checkout/sessions/${encodeURIComponent(sessionId)}?expand[]=payment_intent`);
 }
