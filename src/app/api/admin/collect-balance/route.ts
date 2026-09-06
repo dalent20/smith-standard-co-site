@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { doc, getDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { requireManager } from '@/lib/auth-server';
+import { getErrorMessage } from '@/lib/errors';
 import { collectRemainingBalance } from '@/lib/stripe-server';
 
 export const runtime = 'nodejs';
@@ -51,8 +52,8 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json({ ok: true, paymentIntentId: intent.id, status: intent.status });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Balance collection failed', error);
-    return NextResponse.json({ error: error?.message || 'Unable to collect remaining balance.' }, { status: 500 });
+    return NextResponse.json({ error: getErrorMessage(error, 'Unable to collect remaining balance.') }, { status: 500 });
   }
 }
