@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { ShieldCheck } from 'lucide-react';
 import { auth } from '@/lib/firebase';
+import { getErrorMessage } from '@/lib/errors';
 
 export default function AdminLogin() {
   const router = useRouter();
@@ -28,9 +29,9 @@ export default function AdminLogin() {
       if (!response.ok) throw new Error(data.error || 'This account does not have manager access.');
       router.replace('/admin/dashboard');
       router.refresh();
-    } catch (loginError: any) {
+    } catch (loginError: unknown) {
       console.error('Admin login error', loginError);
-      setError(loginError?.message || 'Unable to sign in.');
+      setError(getErrorMessage(loginError, 'Unable to sign in.'));
       setLoading(false);
     }
   }
